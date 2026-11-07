@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+V=@UPSTREAM@
+if [ "$1" = configure ]; then
+	systemd-sysusers /usr/lib/sysusers.d/t1bridge.conf
+	systemd-tmpfiles --create /usr/lib/tmpfiles.d/t1bridge.conf
+	systemctl daemon-reload || :
+	udevadm control --reload || :
+	if ! dkms status -m t1bridge -v "$V" | grep -q .; then
+		dkms add -m t1bridge -v "$V"
+	fi
+	# Running kernel must build; other installed kernels with headers are best effort
+	# (without the modules a kernel boots with no Touch Bar, since apple-ibridge is blocked).
+	dkms install -m t1bridge -v "$V" -k "$(uname -r)"
+	for b in /lib/modules/*/build; do
+		[ -d "$b" ] || continue
+		k=${b%/build}; k=${k##*/}
+		[ "$k" = "$(uname -r)" ] && continue
+		dkms install -m t1bridge -v "$V" -k "$k" ||
+			echo "warning: t1bridge DKMS build failed for kernel $k: no Touch Bar or Touch ID when booting it" >&2
+	done
+	# dracut copies updates/dkms modules and modules-load.d into the initrd.
+	update-initramfs -u -k all || echo "warning: initramfs update failed" >&2
+fi
+exit 0

@@ -1,0 +1,13 @@
+Package: t1bridge-ubuntu
+Version: @VER@
+Architecture: amd64
+Maintainer: Niels Onderbeke <niels.onderbeke@gmail.com>
+Depends: dkms, systemd (>= 256), libc6, libgcc-s1, libcurl4t64, libarchive13t64, libssl3t64, liblzma5, libudev1, libsystemd0, iio-sensor-proxy
+Section: misc
+Priority: optional
+Homepage: https://github.com/standardagents/t1bridge
+Description: Apple T1 iBridge support (T1Bridge @UPSTREAM@), local Ubuntu build
+ Touch Bar display, Touch ID broker, private T1 network link and xART storage
+ from standardagents/t1bridge, with DKMS kernel modules and an apple_t1_socw
+ module for the T1 sleep/wake call. Needs the matching +t1bridge libfprint and
+ fprintd packages for fingerprint use.

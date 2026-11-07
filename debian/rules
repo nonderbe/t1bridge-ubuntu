@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+# Registry crates come from the orig-vendor component (vendor/), so the
+# build is fully offline.
+export CARGO_HOME = $(CURDIR)/debian/cargo-home
+export CARGO_NET_OFFLINE = true
+CARGO = cargo build --locked --offline --release
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	mkdir -p $(CARGO_HOME)
+	# dpkg-source drops the crates' Cargo.toml.orig files; keep the package
+	# checksum (checked against Cargo.lock) and drop the per-file list.
+	for f in vendor/*/.cargo-checksum.json; do \
+		sed -i 's/"files":{[^}]*}/"files":{}/' "$$f"; \
+	done
+	printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "%s/vendor"\n' "$(CURDIR)" > $(CARGO_HOME)/config.toml
+
+override_dh_auto_build:
+	$(CARGO) -p t1-touchbar-hw --bin t1-touchbar-hw --features service
+	$(CARGO) -p t1-touchbar --bin t1-touchbar
+	$(CARGO) -p t1-daemons --bin t1-xart-storage
+	$(CARGO) -p t1-daemons --bin t1-ncm-ready
+	$(CARGO) -p t1-daemons --bin t1-keybag-relay --features keybag-relay-service
+	$(CARGO) -p t1-daemons --bin t1-touchid-auth --features auth-broker-service
+	$(CARGO) -p t1-daemons --bin t1-touchid
+	$(CARGO) -p t1-import --bin t1bridge
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	# t1-release is upstream's Arch repository tooling (needs pacman/gpg), not shipped.
+	cargo test --locked --offline --workspace --exclude t1-release --all-targets --all-features
+endif
+
+override_dh_auto_install:
+	debian/extra/stage.sh $(CURDIR) $(CURDIR)/debian/t1bridge-ubuntu $(CURDIR)/debian/extra
+
+override_dh_auto_clean:
+	rm -rf target debian/cargo-home
+
+# The T1 is switched with t1-switch.sh, which enables the units; installing
+# the package must not start anything. sysusers/tmpfiles run in postinst.
+override_dh_installsystemd:
+override_dh_installsystemduser:
+override_dh_installsysusers:
+override_dh_installtmpfiles:
+override_dh_dwz:

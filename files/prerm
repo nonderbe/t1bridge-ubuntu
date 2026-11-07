@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+V=@UPSTREAM@
+case "$1" in
+remove|upgrade|deconfigure)
+	systemctl stop t1-touchbar-hw.service t1-touchbar-hw.socket \
+		t1-touchid-auth.service t1-touchid-auth.socket t1bridge-fingerprint.socket \
+		t1bridge-keybag.service 't1-xart-storage@*.service' 't1-ncm-ready@*.service' \
+		2>/dev/null || :
+	/usr/lib/t1bridge/t1-fw purge || :
+	if [ "$1" = remove ]; then
+		systemctl disable t1-touchbar-hw.service t1-touchid-auth.socket \
+			t1bridge-fingerprint.socket 2>/dev/null || :
+		systemctl --global disable t1-touchbar.service 2>/dev/null || :
+	fi
+	if dkms status -m t1bridge -v "$V" | grep -q .; then
+		dkms remove -m t1bridge -v "$V" --all || :
+	fi
+	;;
+esac
+exit 0

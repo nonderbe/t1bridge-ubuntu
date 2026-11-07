@@ -1,0 +1,42 @@
+Description: t1-platform: emit online-recovery libraries after the static archive
+ With a linker that defaults to --as-needed (Debian/Ubuntu) the shared
+ libraries printed before the static archive are dropped and the t1-platform
+ lib test fails to link.
+Author: Niels Onderbeke <niels.onderbeke@gmail.com>
+Forwarded: https://github.com/standardagents/t1bridge/pull/60
+Last-Update: 2026-11-07
+---
+ crates/t1-platform/build.rs | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/crates/t1-platform/build.rs b/crates/t1-platform/build.rs
+index 3995128..fd81fb2 100644
+--- a/crates/t1-platform/build.rs
++++ b/crates/t1-platform/build.rs
+@@ -120,9 +120,6 @@ fn compile_recovery(objects: &mut Vec<PathBuf>, compiler: &OsStr, manifest: &Pat
+             &output.join(format!("{name}.o")),
+         ));
+     }
+-    for library in ["curl", "archive", "crypto", "udev"] {
+-        println!("cargo:rustc-link-lib={library}");
+-    }
+ }
+ 
+ fn compile_usb_cycle_guard(
+@@ -157,6 +154,13 @@ fn link_native(
+         println!("cargo:rustc-link-search=native={}", output.display());
+         println!("cargo:rustc-link-lib=static=t1_platform_native");
+     }
++    // Dynamic libraries must follow the static archive that references them;
++    // linkers that default to --as-needed (Debian/Ubuntu) drop them otherwise.
++    if env::var_os("CARGO_FEATURE_ONLINE_RECOVERY").is_some() {
++        for library in ["curl", "archive", "crypto", "udev"] {
++            println!("cargo:rustc-link-lib={library}");
++        }
++    }
+     if xz {
+         println!("cargo:rustc-link-lib=lzma");
+     }
+-- 
+2.53.0
+

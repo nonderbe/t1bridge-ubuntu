@@ -1,0 +1,34 @@
+Source: t1bridge-ubuntu
+Section: misc
+Priority: optional
+Maintainer: Niels Onderbeke <niels.onderbeke@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               rustc (>= 1.88),
+               libcurl4-openssl-dev,
+               libarchive-dev,
+               libssl-dev,
+               liblzma-dev,
+               libudev-dev,
+               libsystemd-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/standardagents/t1bridge
+Vcs-Browser: https://github.com/nonderbe/t1bridge-ubuntu
+
+Package: t1bridge-ubuntu
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, dkms, systemd (>= 256), iio-sensor-proxy
+Suggests: libfprint-2-2 (>= 1:1.95.1+tod1-0ubuntu2+t1bridge1), fprintd (>= 1.94.5-4+t1bridge1)
+Description: Apple T1 iBridge support (T1Bridge) for Ubuntu
+ Touch Bar display, Touch ID authentication broker, private T1 network link
+ and xART storage for MacBook Pros with an Apple T1 chip, from
+ standardagents/t1bridge, with DKMS kernel modules (T1 configuration
+ selector, Touch Bar DRM, NCM link, sleep/wake notification).
+ .
+ Installing this package takes over the T1 at the next boot: the T1 comes up
+ in USB configuration 2 and the legacy apple-ibridge Touch Bar driver is
+ blocked. Use t1-switch.sh from t1bridge-ubuntu to install it, because that
+ also keeps the login and lock screens off the fingerprint reader and can
+ revert. Fingerprint use needs the matching +t1bridge libfprint and fprintd
+ packages.

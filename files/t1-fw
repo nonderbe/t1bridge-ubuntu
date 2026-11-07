@@ -1,0 +1,56 @@
+#!/bin/sh
+# Allow the T1's xART connection (TCP 61500) through ufw on the private T1 link only.
+#   t1-fw add IFACE    called by t1-xart-storage@IFACE before start
+#   t1-fw del IFACE    called after stop
+#   t1-fw purge        remove every rule this helper made (package removal)
+# Rules are link-local only (fe80::/10 -> fe80::/10) and carry the comment below.
+# Does nothing when ufw is not installed.
+set -u
+TAG=t1bridge-xart
+PORT=61500
+UFW=/usr/sbin/ufw
+log() { logger -t t1-fw "$*" 2>/dev/null || :; }
+
+[ -x "$UFW" ] || exit 0
+
+purge() {
+	# Delete every stored rule carrying our comment. 'ufw show added' also works
+	# while ufw is inactive. The rule words are plain (validated interface names,
+	# fixed addresses and port), so word splitting them is safe.
+	"$UFW" show added 2>/dev/null |
+		sed -n "s/^ufw \(allow .*\) comment '$TAG'\$/\1/p" |
+		while read -r spec; do
+			# shellcheck disable=SC2086
+			"$UFW" --force delete $spec </dev/null >/dev/null 2>&1 || log "could not delete: $spec"
+		done
+}
+
+valid_t1_iface() {
+	case "$1" in
+	''|*[!A-Za-z0-9_.-]*) return 1 ;;
+	esac
+	[ "${#1}" -le 15 ] || return 1
+	drv=$(readlink "/sys/class/net/$1/device/driver" 2>/dev/null) || return 1
+	[ "${drv##*/}" = apple_t1_ncm ]
+}
+
+case "${1:-}" in
+add)
+	valid_t1_iface "${2:-}" || { log "refusing ${2:-<none>}: not an apple_t1_ncm interface"; exit 1; }
+	purge	# drop rules left over from an unclean stop or an older interface name
+	if "$UFW" allow in on "$2" proto tcp from fe80::/10 to fe80::/10 port "$PORT" \
+		comment "$TAG" >/dev/null 2>&1; then
+		log "allowed tcp/$PORT on $2 (link-local only)"
+	else
+		log "ufw rule for $2 failed"
+	fi
+	;;
+del|purge)
+	purge
+	;;
+*)
+	echo "usage: t1-fw add IFACE | del IFACE | purge" >&2
+	exit 2
+	;;
+esac
+exit 0

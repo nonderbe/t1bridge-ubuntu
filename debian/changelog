@@ -1,0 +1,9 @@
+t1bridge-ubuntu (@VERSION@) @SERIES@; urgency=medium
+
+  * Ubuntu packaging of T1Bridge v0.1.12 (upstream commit 81cbdf8).
+  * apple_t1_socw module for the T1 sleep/wake call (ASOC.SOCW).
+  * ufw rule for the xART port on the T1 link only; initrd rebuild on
+    install and removal (dracut copies the DKMS modules).
+  * Link order fix for --as-needed toolchains (debian/patches).
+
+ -- Niels Onderbeke <niels.onderbeke@gmail.com>  @DATE@

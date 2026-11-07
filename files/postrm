@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+case "$1" in
+remove|purge)
+	systemctl daemon-reload || :
+	# Drop t1_cfgsel and friends from the initrd too, or the T1 keeps config 2.
+	update-initramfs -u -k all || echo "warning: initramfs update failed" >&2
+	udevadm control --reload || :
+	# Imported machine data and enrolled fingerprints stay in /var/lib/t1bridge
+	# (root only); delete that directory by hand to remove them.
+	;;
+esac
+exit 0
