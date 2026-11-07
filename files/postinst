@@ -6,6 +6,17 @@ if [ "$1" = configure ]; then
 	systemd-tmpfiles --create /usr/lib/tmpfiles.d/t1bridge.conf
 	systemctl daemon-reload || :
 	udevadm control --reload || :
+	# 0.1.12-3 opened the login screen through a pam_exec ACL hook (removed);
+	# replace it with userdb membership drop-ins for GDM's greeter user.
+	P=/etc/pam.d/gdm-launch-environment
+	if [ -f "$P" ] && grep -q 't1-greeter-access.*# t1bridge-ubuntu$' "$P"; then
+		install -d -m 0755 /etc/userdb
+		for u in gdm-greeter gdm-greeter-2 gdm-greeter-3; do
+			f="/etc/userdb/$u:t1bridge.membership"
+			[ -e "$f" ] || { printf '{}\n' > "$f"; chmod 0644 "$f"; }
+		done
+		sed -i '/t1-greeter-access.*# t1bridge-ubuntu$/d' "$P"
+	fi
 	if ! dkms status -m t1bridge -v "$V" | grep -q .; then
 		dkms add -m t1bridge -v "$V"
 	fi
@@ -21,5 +32,14 @@ if [ "$1" = configure ]; then
 	done
 	# dracut copies updates/dkms modules and modules-load.d into the initrd.
 	update-initramfs -u -k all || echo "warning: initramfs update failed" >&2
+	# Upgrade: restart what is running on the new binaries (nothing is started
+	# that was not running). The user's renderer reconnects by itself.
+	if [ -n "${2:-}" ]; then
+		# Separate calls: xart propagates its stop to the keybag relay and
+		# pulls it in again, which conflicts inside a single transaction.
+		systemctl try-restart t1-touchbar-hw.service t1-touchid-auth.service || :
+		systemctl try-restart 't1-xart-storage@*.service' || :
+		systemctl try-restart t1bridge-keybag.service || :
+	fi
 fi
 exit 0

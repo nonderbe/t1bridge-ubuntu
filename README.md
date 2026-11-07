@@ -11,9 +11,11 @@ packaging and switch scripts. All T1 protocol work is T1Bridge's.
 > and back the folder up.
 
 Tested on a **MacBookPro14,2** (13", 2017) with **Ubuntu 26.04**, kernel
-7.0.0-42, GNOME, T1Bridge **v0.1.12**:
+7.0.0-43, GNOME 50, T1Bridge **v0.1.12**:
 
 - Touch Bar, ambient light, machine-data import, enrollment and verification work.
+- The Touch Bar also works on the GDM login screen, and its volume, mute and
+  media buttons work in GNOME (a small PipeWire/MPRIS desktop provider).
 - fingerprint authentication works for `sudo` and Polkit (password always remains the fallback).
 - The GDM login screen and the GNOME lock screen are kept off the reader on
   purpose. A reader re-armed every ~30 s by a lock screen reportedly wedged the
@@ -83,8 +85,8 @@ sudo ./t1-switch.sh revert                # then shut down fully and power on
 
 ## From the PPA
 
-The PPA has `t1bridge-ubuntu` and the matching `+t1bridge1` libfprint and
-fprintd. **Don't install them with plain `apt install`:** the package takes over
+A PPA with `t1bridge-ubuntu` and the matching `+t1bridge1` libfprint and
+fprintd is prepared (`debian/`) but not uploaded yet. Once it is: **don't install them with plain `apt install`:** the package takes over
 the T1 at the next boot. Use `t1-switch.sh install`, which points at local
 `.deb`s, after downloading them with `apt download t1bridge-ubuntu libfprint-2-2
 libfprint-2-tod1 fprintd libpam-fprintd` into `out/` and `out/fprint/`.
@@ -111,6 +113,18 @@ newest version, so run `sudo apt upgrade` first.
   Settings → Displays → Automatic Screen Brightness
   (`gsettings set org.gnome.settings-daemon.plugins.power ambient-enabled false`).
   Proposed upstream fix: optional brightness key taps (https://github.com/standardagents/t1bridge/issues/61).
+- **Touch Bar dark on the login screen:** GDM 49+ runs the greeter as a
+  dynamic userdb user (`gdm-greeter`), which can't be added to group
+  `t1bridge` with `usermod`, and the hardware service checks that group with
+  `SO_PEERGROUPS`. `nss-systemd` reads userdb membership drop-ins in
+  `initgroups()`, so `t1-switch.sh greeter-on` (run by `install`) writes
+  `/etc/userdb/gdm-greeter:t1bridge.membership`. The greeter only gets the
+  Touch Bar while it is the active seat0 session.
+- **Touch Bar not back after logout and login:** the upstream user unit is
+  `WantedBy=default.target`, and the user manager outlives a logout, so nothing
+  restarted the renderer. The package adds it to `graphical-session.target.wants`
+  ([t1bridge#35](https://github.com/standardagents/t1bridge/issues/35) has the
+  same root cause).
 - **First enrollment** often fails with `enroll-unknown-error`. Restart
   `t1-touchid-auth.service` and try again.
 - **If Touch ID breaks, don't run `fprintd-delete`.** It can leave an identity

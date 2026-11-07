@@ -7,6 +7,7 @@
 #   sudo ./t1-switch.sh status
 #   sudo ./t1-switch.sh pam       Touch ID for sudo and Polkit (after a successful enroll)
 #   sudo ./t1-switch.sh unpam     undo the PAM step
+#   sudo ./t1-switch.sh greeter-on|greeter-off   Touch Bar on the GDM login screen (on by install)
 #
 # The lock screen and login screen are deliberately kept off fingerprint
 # (a reader re-armed every ~30 s reportedly wedged the T1's Secure Enclave).
@@ -27,6 +28,12 @@ PAM_LINE='auth	sufficient	pam_fprintd.so max-tries=3 timeout=15	# t1bridge-ubunt
 PAM_MARK='# t1bridge-ubuntu'
 FP_PKGS="libfprint-2-2 libfprint-2-tod1 fprintd libpam-fprintd gir1.2-fprint-2.0 libfprint-2-dev"
 LOG=/var/log/t1-switch.log
+GREETER_PAM=/etc/pam.d/gdm-launch-environment
+# GDM 49+ runs the login screen as a dynamic userdb user (gdm-greeter; -2, -3
+# only while an old greeter is still closing). nss-systemd reads these
+# membership drop-ins in initgroups(), so the greeter gets group t1bridge.
+GREETER_USERS="gdm-greeter gdm-greeter-2 gdm-greeter-3"
+USERDB_DIR=/etc/userdb
 GDM_FP_PAM=/etc/pam.d/gdm-fingerprint
 GDM_FP_LINE='auth	requisite	pam_deny.so	# t1bridge-ubuntu: no fingerprint at GDM or the lock screen'
 GDM_FP_MARK='# t1bridge-ubuntu: no fingerprint at GDM or the lock screen'
@@ -140,12 +147,47 @@ do_install() {
 	systemctl daemon-reload
 	systemctl enable t1-touchbar-hw.service t1-touchid-auth.socket t1bridge-fingerprint.socket
 	systemctl --global enable t1-touchbar.service
+	greeter_on
 
 	say "rebuilding initramfs (picks up the module blocks)"
 	update-initramfs -u -k all
 
 	touch "$STATE/installed"
 	say "done. Shut down fully, power on, log in, then: sudo t1bridge status"
+}
+
+greeter_on() { # Touch Bar on the login screen: group t1bridge for GDM's greeter user
+	local u f gid
+	greeter_pam_cleanup
+	gid=$(getent group t1bridge | cut -d: -f3) || gid=
+	[ -n "$gid" ] || { echo "   (group t1bridge missing; login-screen Touch Bar skipped)"; return 0; }
+	install -d -m 0755 "$USERDB_DIR"
+	for u in $GREETER_USERS; do
+		f="$USERDB_DIR/$u:t1bridge.membership"
+		[ -e "$f" ] || { printf '{}\n' > "$f"; chmod 0644 "$f"; }
+	done
+	if getent initgroups gdm-greeter | tr ' ' '\n' | grep -qx "$gid"; then
+		say "Touch Bar enabled on the GDM login screen ($USERDB_DIR/gdm-greeter:t1bridge.membership)"
+	else
+		echo "   warning: gdm-greeter does not resolve to group t1bridge (is 'systemd' in the group: line of /etc/nsswitch.conf?)" >&2
+	fi
+}
+
+greeter_off() {
+	local u f had=
+	greeter_pam_cleanup
+	for u in $GREETER_USERS; do
+		f="$USERDB_DIR/$u:t1bridge.membership"
+		[ -e "$f" ] && { rm -f "$f"; had=1; }
+	done
+	rmdir "$USERDB_DIR" 2>/dev/null || :
+	[ -z "$had" ] || say "Touch Bar on the login screen disabled (takes effect at the next login screen)"
+}
+
+greeter_pam_cleanup() { # 0.1.12-3 used a pam_exec ACL hook; remove it
+	[ -f "$GREETER_PAM" ] && grep -qF "$PAM_MARK" "$GREETER_PAM" || return 0
+	sed -i "/$PAM_MARK\$/d" "$GREETER_PAM"
+	say "removed the old ACL hook line from $GREETER_PAM"
 }
 
 do_unpam() {
@@ -187,6 +229,7 @@ do_revert() {
 		sed -i "/^$GDM_MARK\$/{N;d}" "$GDM_DEFAULTS"
 	fi
 	gdm_fp_unblock
+	greeter_off
 	user_gsetting reset org.gnome.login-screen enable-fingerprint-authentication ||
 		echo "   (as yourself, run: gsettings reset org.gnome.login-screen enable-fingerprint-authentication)"
 	systemctl --global disable t1-touchbar.service 2>/dev/null || :
@@ -241,7 +284,14 @@ do_status() {
 	echo "held: $(apt-mark showhold | tr '\n' ' ')"
 	echo "modules: $(lsmod | awk '$1 ~ /^(t1_cfgsel|appletbdrm|apple_t1_ncm|apple_t1_socw|apple_ibridge|apple_ib_tb|apple_ib_als|hid_sensor_als|uvcvideo)$/{printf "%s ", $1}')"
 	echo "PAM fingerprint lines: $(grep -l "$PAM_MARK" /etc/pam.d/* 2>/dev/null | tr '\n' ' ')"
-	echo "GDM fingerprint blocked: $(grep -qF "$GDM_FP_MARK" "$GDM_FP_PAM" 2>/dev/null && echo yes || echo no)"
+	if grep -q '^[^#]*pam_fprintd' /etc/pam.d/common-auth 2>/dev/null; then
+		echo "Login/lock screen fingerprint: ON (pam_fprintd in common-auth, via pam-auth-update)"
+	elif grep -qF "$GDM_FP_MARK" "$GDM_FP_PAM" 2>/dev/null; then
+		echo "Login/lock screen fingerprint: off (gdm-fingerprint blocked)"
+	else
+		echo "Login/lock screen fingerprint: not blocked"
+	fi
+	echo "Touch Bar on login screen: $([ -e "$USERDB_DIR/gdm-greeter:t1bridge.membership" ] && echo on || echo off)"
 	if command -v t1bridge >/dev/null; then t1bridge status || :; fi
 }
 
@@ -250,6 +300,8 @@ install) do_install ;;
 revert) do_revert ;;
 pam) do_pam ;;
 unpam) do_unpam ;;
+greeter-on) mkdir -p "$STATE"; greeter_on ;;
+greeter-off) greeter_off ;;
 status) do_status ;;
 *) sed -n '2,12p' "$0"; exit 2 ;;
 esac

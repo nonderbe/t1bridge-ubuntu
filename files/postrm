@@ -3,6 +3,14 @@ set -e
 case "$1" in
 remove|purge)
 	systemctl daemon-reload || :
+	# Login-screen access (written by t1-switch.sh greeter-on or the 0.1.12-3
+	# migration in postinst).
+	for u in gdm-greeter gdm-greeter-2 gdm-greeter-3; do
+		rm -f "/etc/userdb/$u:t1bridge.membership"
+	done
+	rmdir /etc/userdb 2>/dev/null || :
+	P=/etc/pam.d/gdm-launch-environment
+	[ ! -f "$P" ] || sed -i '/t1-greeter-access.*# t1bridge-ubuntu$/d' "$P"
 	# Drop t1_cfgsel and friends from the initrd too, or the T1 keeps config 2.
 	update-initramfs -u -k all || echo "warning: initramfs update failed" >&2
 	udevadm control --reload || :

@@ -5,5 +5,11 @@ t1bridge-ubuntu (@VERSION@) @SERIES@; urgency=medium
   * ufw rule for the xART port on the T1 link only; initrd rebuild on
     install and removal (dracut copies the DKMS modules).
   * Link order fix for --as-needed toolchains (debian/patches).
+  * GNOME/PipeWire desktop provider: volume, mute and media buttons.
+  * Upgrades keep the T1 services running and restart them afterwards.
+  * Touch Bar on the GDM login screen: userdb membership drop-ins put GDM's
+    dynamic greeter user in group t1bridge (replaces the 0.1.12-3 ACL hook).
+  * Touch Bar renderer restarts on every graphical login, also when the user
+    manager outlived a logout.
 
  -- Niels Onderbeke <niels.onderbeke@gmail.com>  @DATE@

@@ -29,6 +29,9 @@ install -Dm755 "$R/t1-touchid-auth" "$DEST/usr/lib/t1bridge/t1-touchid-auth"
 install -Dm755 "$R/t1-touchid"      "$DEST/usr/bin/t1-touchid"
 install -Dm755 "$R/t1bridge"        "$DEST/usr/bin/t1bridge"
 install -Dm755 "$EXTRA/files/t1-fw"  "$DEST/usr/lib/t1bridge/t1-fw"
+install -Dm755 "$EXTRA/files/t1bridge-gnome-provider" "$DEST/usr/lib/t1bridge/t1bridge-gnome-provider"
+install -Dm644 "$EXTRA/files/t1-touchbar-gnome-provider.conf" \
+	"$DEST/usr/lib/systemd/user/t1-touchbar.service.d/50-gnome-provider.conf"
 
 # systemd, udev, sysusers, tmpfiles (unchanged upstream files)
 S="$SRC/systemd"
@@ -38,6 +41,11 @@ for u in t1-touchbar-hw.service t1-touchbar-hw.socket t1-xart-storage@.service \
 	install -Dm644 "$S/$u" "$DEST/usr/lib/systemd/system/$u"
 done
 install -Dm644 "$S/user/t1-touchbar.service" "$DEST/usr/lib/systemd/user/t1-touchbar.service"
+# The unit is PartOf=graphical-session.target but only WantedBy=default.target:
+# after a logout the user manager stays up, so a new login never restarted the
+# renderer. Pull it in with every graphical session.
+mkdir -p "$DEST/usr/lib/systemd/user/graphical-session.target.wants"
+ln -sfn ../t1-touchbar.service "$DEST/usr/lib/systemd/user/graphical-session.target.wants/t1-touchbar.service"
 install -Dm644 "$S/t1bridge.sysusers" "$DEST/usr/lib/sysusers.d/t1bridge.conf"
 install -Dm644 "$S/t1bridge.conf" "$DEST/usr/lib/tmpfiles.d/t1bridge.conf"
 install -Dm644 "$S/50-t1bridge-ncm.link" "$DEST/usr/lib/systemd/network/50-t1bridge-ncm.link"
